@@ -84,8 +84,8 @@ declare function csvXqLib:createCsvFromXml(
 };
 
 (:~
- Get a single CSV document document. This function supports an optional base64Enc 
- boolean query parameter.  If true, a base64 encoded string is returned (defaults to 
+ Get a single CSV document. This function supports an optional base64Enc boolean
+ query parameter.  If true, a base64 encoded string is returned (defaults to 
  false if no value is specified).
  
  @param $csvUri    - document uri for the csv file
