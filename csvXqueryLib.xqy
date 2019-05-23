@@ -1,3 +1,8 @@
+(:
+	TODO: Add template support
+	TODO: Add special char support for code points/joinCodes
+:)
+
 xquery version "1.0-ml";
 
 (:
@@ -418,7 +423,10 @@ declare function csvXqLib:parseRowIntoSequence(
 	let $commaChar      := "&#44;"
 	let $singleComRegEx := fn:concat("(^", $commaChar, "$)")
 	let $multiComRegEx  := fn:concat("(^", $commaChar, "+$)")
-	let $tokenDQ        := fn:tokenize($row, $dblQChar)
+	(: special case to handle double quotes inside of an already double quoted value :)
+	let $escapedDblQ    := "%%22%%"
+	let $replRow        := fn:replace($row, "&#34;&#34;", $escapedDblQ)
+	let $tokenDQ        := fn:tokenize($replRow, $dblQChar)
 	let $tokenDQCnt     := fn:count($tokenDQ)
 
 	return
@@ -427,51 +435,53 @@ declare function csvXqLib:parseRowIntoSequence(
 		(: row contains double quotes which means there are commas within one or more data 
 		 : elements; tokenize on double quotes and then handle all the special cases :)
 		else
-  		for $val at $pos in $tokenDQ
-  		return
-  			(: blank value at the first or last position :)
-    		if ($val eq "" and $pos = (1, $tokenDQCnt)) then ()
-    		(: value is a single comma (only) :)
-    		else if (fn:matches($val, $singleComRegEx)) then
-    			(: at first or last position :)
-    			if ($pos = (1, $tokenDQCnt)) then ""
-    			else ()
-      		(: value is multiple commas (only) :)
-    		else if (fn:matches($val, $multiComRegEx)) then
-    			let $newVal := 
-    				(: preceding value was a quoted value and we are not at the first
-    				 : sequence value position; remove one preceding comma :)
-      			if (fn:not(fn:starts-with($tokenDQ[$pos - 1], $commaChar)) and $pos ne 1) then
-        			fn:substring-after($val, $commaChar)
-      			else $val
-    			let $retVal := 
-    				(: succeeding value is a quoted value and we are not at the last
-    				 : sequence value position; remove one preceeding comma :)
-    				if (fn:not(fn:starts-with($tokenDQ[$pos + 1], $commaChar)) and $pos ne $tokenDQCnt) then
-        			fn:substring-after($newVal, $commaChar) 
-      			else $newVal
-    			return
-    				(: if retVal is empty or blank then return blank, otherwise tokenize it :)
-      			if (fn:empty($retVal) or $retVal eq "") then ""
-      			else fn:tokenize($retVal, $commaChar)
-      		(: value starts with or ends with a comma :)
-    		else if (fn:starts-with($val, $commaChar) or fn:ends-with($val, $commaChar)) then
-    			let $newVal := 
-    				(: value starts with a comma and we are not at the
-    				 : first position; remove one preceeding comma :)
-      			if (fn:starts-with($val, ",") and $pos ne 1) then
-        			fn:substring-after($val, $commaChar)
-      			else $val
-     			let $retVal := 
-     				(: value ends with a comma and we are not at the
-    				 : last position; remove one succeeding comma :)
-     				if (fn:ends-with($newVal, $commaChar) and $pos ne $tokenDQCnt) then
-         			fn:substring($newVal, 1, (fn:string-length($newVal) - 1))
-       			else $newVal
-       		(: tokenize the retVal :)
-     			return fn:tokenize($retVal, $commaChar)
-    		(: this was a quoted string - so its a single field value :)
-    		else $val
+			for $val at $pos in $tokenDQ
+			(: restore the double quote back since we've already tokenized :)
+			let $val := fn:replace($val, $escapedDblQ, $dblQChar)
+			return
+				(: blank value at the first or last position :)
+				if ($val eq "" and $pos = (1, $tokenDQCnt)) then ()
+				(: value is a single comma (only) :)
+				else if (fn:matches($val, $singleComRegEx)) then
+					(: at first or last position :)
+					if ($pos = (1, $tokenDQCnt)) then ""
+					else ()
+				(: value is multiple commas (only) :)
+				else if (fn:matches($val, $multiComRegEx)) then
+					let $newVal := 
+						(: preceding value was a quoted value and we are not at the first
+						 : sequence value position; remove one preceding comma :)
+						if (fn:not(fn:starts-with($tokenDQ[$pos - 1], $commaChar)) and $pos ne 1) then
+							fn:substring-after($val, $commaChar)
+						else $val
+					let $retVal := 
+						(: succeeding value is a quoted value and we are not at the last
+						 : sequence value position; remove one preceeding comma :)
+						if (fn:not(fn:starts-with($tokenDQ[$pos + 1], $commaChar)) and $pos ne $tokenDQCnt) then
+							fn:substring-after($newVal, $commaChar) 
+						else $newVal
+					return
+						(: if retVal is empty or blank then return blank, otherwise tokenize it :)
+						if (fn:empty($retVal) or $retVal eq "") then ""
+						else fn:tokenize($retVal, $commaChar)
+				(: value starts with or ends with a comma :)
+				else if (fn:starts-with($val, $commaChar) or fn:ends-with($val, $commaChar)) then
+					let $newVal := 
+						(: value starts with a comma and we are not at the
+						 : first position; remove one preceeding comma :)
+						if (fn:starts-with($val, ",") and $pos ne 1) then
+							fn:substring-after($val, $commaChar)
+						else $val
+					let $retVal := 
+						(: value ends with a comma and we are not at the
+						 : last position; remove one succeeding comma :)
+						if (fn:ends-with($newVal, $commaChar) and $pos ne $tokenDQCnt) then
+							fn:substring($newVal, 1, (fn:string-length($newVal) - 1))
+						else $newVal
+					(: tokenize the retVal :)
+					return fn:tokenize($retVal, $commaChar)
+				(: this was a quoted string - so its a single field value :)
+				else $val
 };
 
 (:~
