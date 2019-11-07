@@ -9,7 +9,7 @@ xquery version "1.0-ml";
  : Lib Name:    csvXqueryLib
  : Date:        04/25/2019
  : Author:      Gary Hott
- : Does:        CSV stuff
+ : Does:        CSV things
  : Inspired By: (Dave Cassell)  - https://github.com/dmcassel/blog-code/blob/master/src/app/models/csv-lib.xqy
  :              (Matthew Royal) - https://github.com/masyukun/correct-csv-parser-xquery
  :)
@@ -23,8 +23,10 @@ import module namespace sem    = "http://marklogic.com/semantics" at "/MarkLogic
 declare namespace json = "http://marklogic.com/xdmp/json";
 
 (: use json:object() here vice map:map() to maintain key order :)
-declare private variable $headersMap     := json:object();
-declare private variable $createdDocsMap := json:object();
+declare private variable $headersMap          := json:object();
+declare private variable $createdDocsMap      := json:object();
+declare private variable $removeNonAsciiChars := 
+	"var inText; inText.toString().replace(/[^\x00-\x7F]/g, '');";
 
 
 (:~
@@ -174,6 +176,13 @@ declare function csvXqLib:createXmlFromCsv(
 		else if ($xmlInputType ne "xml" or fn:not(fn:empty($xmlInputType))) then 
 			"Unsupported XML template input type"
 		else
+			(: remove non ascii characters :)
+			let $csvInput  := 
+				document { 
+					if (fn:not(fn:empty($csvInput))) then
+						xdmp:javascript-eval($removeNonAsciiChars, ("inText", $csvInput/text()))
+					else ()
+				}
 			let $batchUuid := sem:uuid-string()
 			(: set the fileName, uri, collections, and permissions for the csv doc :)
 			let $csvFileName :=
